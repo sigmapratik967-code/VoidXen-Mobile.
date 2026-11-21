@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -35,10 +35,31 @@ jobs:
           mkdir source
           unzip -q "$ZIP" -d source
 
-      - name: Build APK
+      - name: Fix JVM targets and build APK
         run: |
           PROJECT=$(find source -name settings.gradle.kts -printf '%h\n' | head -n 1)
           test -n "$PROJECT"
+
+          python3 - "$PROJECT/app/build.gradle.kts" <<'PY'
+          import sys
+          p = sys.argv[1]
+          s = open(p).read()
+          marker = "    defaultConfig {"
+          patch = """    compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+
+          """
+          if "kotlinOptions {" not in s:
+              s = s.replace(marker, patch + marker, 1)
+          open(p, "w").write(s)
+          PY
+
           gradle -p "$PROJECT" assembleDebug
 
       - name: Upload APK
